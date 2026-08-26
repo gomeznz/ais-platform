@@ -1,0 +1,12 @@
+# Builds and runs the AIS ingest service (terrestrial + satellite adapters -> Postgres).
+# Built from the monorepo root: docker build -f infra/Dockerfile.ingest .
+FROM node:20-alpine
+WORKDIR /app
+
+COPY . .
+RUN npm install
+RUN npm run build -w packages/ais-decoder
+RUN npm run build -w apps/ingest
+
+ENV NODE_ENV=production
+CMD ["node", "apps/ingest/dist/index.js"]

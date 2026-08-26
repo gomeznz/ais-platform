@@ -1,0 +1,20 @@
+{
+  "name": "@ais-platform/ingest",
+  "version": "0.1.0",
+  "description": "AIS ingest service: terrestrial NMEA listeners + satellite/aggregator adapters -> Postgres",
+  "type": "module",
+  "main": "./dist/index.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsc -p tsconfig.json && node dist/index.js",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@ais-platform/ais-decoder": "*",
+    "dotenv": "^16.4.5",
+    "pg": "^8.13.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.0"
+  }
+}

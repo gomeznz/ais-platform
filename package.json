@@ -1,0 +1,27 @@
+{
+  "name": "ais-platform",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Multi-tenant AIS server platform for managing multiple vessel fleets",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "dev:ingest": "npm run dev -w apps/ingest",
+    "dev:api": "npm run dev -w apps/api",
+    "dev:web": "npm run dev -w apps/web",
+    "migrate": "node db/migrate.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.1",
+    "@types/pg": "^8.23.1",
+    "@types/ws": "^8.18.1",
+    "typescript": "^5.9.3"
+  }
+}

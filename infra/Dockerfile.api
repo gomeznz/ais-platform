@@ -1,0 +1,13 @@
+# Builds and runs the AIS platform API (auth, fleets/vessels, live WS feed).
+# Built from the monorepo root: docker build -f infra/Dockerfile.api .
+FROM node:20-alpine
+WORKDIR /app
+
+COPY . .
+RUN npm install
+RUN npm run build -w packages/ais-decoder
+RUN npm run build -w apps/api
+
+ENV NODE_ENV=production
+EXPOSE 8080
+CMD ["node", "apps/api/dist/index.js"]
