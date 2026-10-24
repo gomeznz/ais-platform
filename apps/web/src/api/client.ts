@@ -115,6 +115,16 @@ export interface Receiver {
   updated_at: string;
 }
 
+export interface ReceiverEvent {
+  id: number;
+  ts: string;
+  kind: "connect" | "message" | "error" | "close";
+  status: "ok" | "dropped" | "error" | "info";
+  message_type: string | null;
+  mmsi: number | null;
+  detail: string | null;
+}
+
 export const api = {
   register: (organizationName: string, email: string, password: string) =>
     request<AuthResponse>("/auth/register", {
@@ -204,6 +214,12 @@ export const api = {
       method: "DELETE",
       token,
     }),
+
+  getReceiverEvents: (token: string, receiverId: string, tenantId?: string, limit = 50) =>
+    request<{ events: ReceiverEvent[] }>(
+      `/admin/receivers/${receiverId}/events?limit=${limit}${tenantId ? `&tenantId=${tenantId}` : ""}`,
+      { token }
+    ),
 
   // --- Platform admin: cross-tenant ---
 

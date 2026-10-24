@@ -379,6 +379,54 @@ input {
   box-shadow: -8px 0 8px -8px rgba(0, 0, 0, 0.5);
 }
 
+.admin-activity-panel {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.admin-activity-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+  font-size: 0.9em;
+}
+
+.admin-activity-log {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.admin-activity-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.82em;
+  padding: 4px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.admin-activity-line:last-child {
+  border-bottom: none;
+}
+
+.admin-activity-detail {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+}
+
 .admin-form {
   background: var(--panel);
   border: 1px solid var(--border);

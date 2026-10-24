@@ -8,7 +8,13 @@ import { createWebsocketAdapter } from "./adapters/websocketAdapter.js";
 import { AISSTREAM_DEFAULT_URL, buildAisStreamSubscribeMessage, parseAisStreamMessage } from "./adapters/aisstreamProvider.js";
 import type { SatellitePositionUpdate } from "./adapters/types.js";
 import { config } from "./config.js";
-import { fetchActiveReceivers, updateReceiverStatus, touchReceiverLastMessage, type ReceiverRow } from "./db.js";
+import {
+  fetchActiveReceivers,
+  updateReceiverStatus,
+  touchReceiverLastMessage,
+  recordReceiverEvent,
+  type ReceiverRow,
+} from "./db.js";
 
 const { Client } = pg;
 
@@ -256,6 +262,7 @@ export class ReceiverManager {
       parseMessage: parseAisStreamMessage,
       onOpen: () => setStatus("connected"),
       onError: (message) => setStatus("error", message),
+      onEvent: (event) => recordReceiverEvent(receiver.id, event).catch(() => {}),
     });
 
     adapter.start((update) => {

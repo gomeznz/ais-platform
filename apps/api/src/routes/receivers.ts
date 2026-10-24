@@ -179,6 +179,30 @@ export async function receiverRoutes(app: FastifyInstance): Promise<void> {
     }
   );
 
+  // Recent diagnostic events for one receiver (connect/message/error/close),
+  // written by the ingest service — the UI counterpart to pulling its logs
+  // by hand. Scoped to the tenant like the rest of these routes, so one
+  // tenant can't read another's receiver activity.
+  app.get<{ Params: { id: string }; Querystring: { limit?: string } }>(
+    "/admin/receivers/:id/events",
+    async (request, reply) => {
+      const tenantId = resolveTenantId(request);
+      const { rows: existingRows } = await pool.query(
+        "SELECT id FROM receivers WHERE id = $1 AND tenant_id = $2",
+        [request.params.id, tenantId]
+      );
+      if (existingRows.length === 0) return reply.code(404).send({ error: "Receiver not found" });
+
+      const limit = Math.min(Math.max(Number(request.query?.limit) || 50, 1), 200);
+      const { rows } = await pool.query(
+        `SELECT id, ts, kind, status, message_type, mmsi, detail
+         FROM receiver_events WHERE receiver_id = $1 ORDER BY ts DESC LIMIT $2`,
+        [request.params.id, limit]
+      );
+      return { events: rows };
+    }
+  );
+
   app.delete<{ Params: { id: string } }>("/admin/receivers/:id", async (request, reply) => {
     const tenantId = resolveTenantId(request);
     const { rows } = await pool.query(

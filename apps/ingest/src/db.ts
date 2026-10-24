@@ -111,6 +111,35 @@ export async function touchReceiverLastMessage(id: string): Promise<void> {
   await pool.query("UPDATE receivers SET last_message_at = now() WHERE id = $1", [id]);
 }
 
+export interface ReceiverEventInput {
+  kind: "connect" | "message" | "error" | "close";
+  status: "ok" | "dropped" | "error" | "info";
+  messageType?: string | null;
+  mmsi?: number | null;
+  detail?: string | null;
+}
+
+// Keep only the most recent N events per receiver — this is a rolling
+// diagnostic window for the admin UI, not an audit log, and callers already
+// sample rather than recording every message, so this cap is mainly a
+// backstop against a receiver that reconnects in a fast loop.
+const MAX_EVENTS_PER_RECEIVER = 200;
+
+/** Record one diagnostic event (connect/message/error/close) for a receiver, for the admin UI's activity view. */
+export async function recordReceiverEvent(receiverId: string, event: ReceiverEventInput): Promise<void> {
+  await pool.query(
+    `INSERT INTO receiver_events (receiver_id, kind, status, message_type, mmsi, detail)
+     VALUES ($1, $2, $3, $4, $5, $6)`,
+    [receiverId, event.kind, event.status, event.messageType ?? null, event.mmsi ?? null, event.detail ?? null]
+  );
+  await pool.query(
+    `DELETE FROM receiver_events
+     WHERE receiver_id = $1
+       AND id NOT IN (SELECT id FROM receiver_events WHERE receiver_id = $1 ORDER BY ts DESC LIMIT $2)`,
+    [receiverId, MAX_EVENTS_PER_RECEIVER]
+  );
+}
+
 export async function upsertVesselStatic(update: NormalizedStaticUpdate): Promise<void> {
   await ensureVesselStub(update.mmsi);
   await pool.query(

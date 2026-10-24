@@ -14,6 +14,19 @@ export interface WebsocketAdapterOptions {
   parseMessage: (msg: unknown) => SatellitePositionUpdate | null;
   onError?: (message: string) => void;
   onOpen?: () => void;
+  /**
+   * Mirrors the console diagnostic logging below (same sampling: every
+   * message for the first 20, then every 50th) so the admin UI's receiver
+   * activity view shows exactly what the logs show, without needing a
+   * separate code path to drift out of sync with it.
+   */
+  onEvent?: (event: {
+    kind: "connect" | "message" | "error" | "close";
+    status: "ok" | "dropped" | "error" | "info";
+    messageType?: string | null;
+    mmsi?: number | null;
+    detail?: string | null;
+  }) => void;
 }
 
 export interface WebsocketAdapter {
@@ -51,7 +64,10 @@ export function createWebsocketAdapter(options: WebsocketAdapterOptions): Websoc
           Object.entries(subscribe).map(([k, v]) => [k, /api[-_]?key/i.test(k) ? "<redacted>" : v])
         );
         console.log(`[ingest] ${options.name} connected, sending subscribe: ${JSON.stringify(redacted)}`);
+        options.onEvent?.({ kind: "connect", status: "info", detail: JSON.stringify(redacted) });
         ws.send(JSON.stringify(subscribe));
+      } else {
+        options.onEvent?.({ kind: "connect", status: "info", detail: null });
       }
     });
 
@@ -62,6 +78,11 @@ export function createWebsocketAdapter(options: WebsocketAdapterOptions): Websoc
         parsed = JSON.parse(raw.toString("utf8"));
       } catch {
         console.warn(`[ingest] ${options.name} received non-JSON message (${raw.toString().length} bytes)`);
+        options.onEvent?.({
+          kind: "message",
+          status: "dropped",
+          detail: `non-JSON message (${raw.toString().length} bytes)`,
+        });
         return;
       }
       try {
@@ -79,15 +100,24 @@ export function createWebsocketAdapter(options: WebsocketAdapterOptions): Websoc
           if (!update) {
             console.log(`[ingest] ${options.name} msg#${messageCount} raw: ${JSON.stringify(parsed).slice(0, 500)}`);
           }
+          options.onEvent?.({
+            kind: "message",
+            status: update ? "ok" : "dropped",
+            messageType: type,
+            mmsi: update?.mmsi ?? null,
+            detail: update ? null : JSON.stringify(parsed).slice(0, 500),
+          });
         }
         if (update && onUpdateCb) onUpdateCb(update);
       } catch (err) {
         console.warn(`[ingest] ${options.name} failed to parse message: ${(err as Error).message}`);
+        options.onEvent?.({ kind: "message", status: "error", detail: (err as Error).message });
       }
     });
 
     ws.on("error", (err) => {
       console.warn(`[ingest] ${options.name} websocket error: ${err.message}`);
+      options.onEvent?.({ kind: "error", status: "error", detail: err.message });
       options.onError?.(err.message);
     });
 
@@ -97,6 +127,11 @@ export function createWebsocketAdapter(options: WebsocketAdapterOptions): Websoc
       console.warn(
         `[ingest] ${options.name} websocket closed (code ${code}${reasonText ? `, ${reasonText}` : ""}), retrying in ${backoffMs}ms`
       );
+      options.onEvent?.({
+        kind: "close",
+        status: code === 1000 ? "info" : "error",
+        detail: `closed (code ${code}${reasonText ? `, ${reasonText}` : ""}), retrying in ${backoffMs}ms`,
+      });
       setTimeout(connect, backoffMs);
       backoffMs = Math.min(backoffMs * 2, 30_000);
     });

@@ -4,6 +4,7 @@ import {
   api,
   type AdminUser,
   type Receiver,
+  type ReceiverEvent,
   type ReceiverKind,
   type Tenant,
 } from "../api/client.js";
@@ -337,6 +338,7 @@ function ReceiversPanel({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [activityId, setActivityId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!token) return;
@@ -467,6 +469,12 @@ function ReceiversPanel({
                     >
                       {editingId === r.id ? "Close" : "Edit"}
                     </button>
+                    <button
+                      className="link-button"
+                      onClick={() => setActivityId(activityId === r.id ? null : r.id)}
+                    >
+                      {activityId === r.id ? "Hide activity" : "Activity"}
+                    </button>
                     <button className="link-button" onClick={() => handleToggle(r)}>
                       {r.enabled ? "Disable" : "Enable"}
                     </button>
@@ -487,6 +495,7 @@ function ReceiversPanel({
                     }}
                   />
                 )}
+                {activityId === r.id && <ReceiverActivityRow receiver={r} tenantId={tenantId} />}
               </Fragment>
             ))}
             {receivers.length === 0 && (
@@ -629,6 +638,88 @@ function ReceiversPanel({
 }
 
 /** Inline edit form for one receiver's config, rendered as an extra table row right below it. Kind is fixed — switching kind entirely changes the config shape, so that still goes through remove + re-add. */
+function statusTone(status: ReceiverEvent["status"]): string {
+  if (status === "ok") return "badge-ok";
+  if (status === "error") return "badge-danger";
+  if (status === "dropped") return "badge-pending";
+  return "badge-accent";
+}
+
+/**
+ * Expandable "what's this receiver actually seeing" view — the UI
+ * counterpart to pulling the ingest service's logs by hand. Polls while
+ * open rather than relying on the table's own 10s refresh, so watching a
+ * receiver right after changing its config feels responsive.
+ */
+function ReceiverActivityRow({
+  receiver,
+  tenantId,
+}: {
+  receiver: Receiver;
+  tenantId: string | undefined;
+}) {
+  const { token } = useAuth();
+  const [events, setEvents] = useState<ReceiverEvent[]>([]);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!token) return;
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const { events: loaded } = await api.getReceiverEvents(token, receiver.id, tenantId, 50);
+        if (!cancelled) setEvents(loaded);
+      } catch (err) {
+        if (!cancelled) setError((err as Error).message);
+      }
+    };
+    load();
+    const interval = setInterval(load, 4_000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [token, receiver.id, tenantId]);
+
+  return (
+    <tr className="admin-activity-row">
+      <td colSpan={6}>
+        <div className="admin-activity-panel">
+          <div className="admin-activity-header">
+            <strong>Recent activity — {receiver.name}</strong>
+            <span className="muted">refreshes every few seconds</span>
+          </div>
+          {error && <div className="error-banner">{error}</div>}
+          {!error && events.length === 0 && (
+            <div className="empty-hint">
+              No diagnostic events yet. Either no traffic has arrived since this receiver last connected, or
+              this receiver kind doesn't log detailed activity (currently only the WebSocket/aisstream.io kind
+              does).
+            </div>
+          )}
+          {events.length > 0 && (
+            <div className="admin-activity-log">
+              {events.map((ev) => (
+                <div key={ev.id} className="admin-activity-line">
+                  <span className="mono muted">{new Date(ev.ts).toLocaleTimeString()}</span>
+                  <span className={`badge ${statusTone(ev.status)}`}>{ev.kind}</span>
+                  {ev.message_type && <span className="mono">{ev.message_type}</span>}
+                  {ev.mmsi !== null && <span className="mono">mmsi {ev.mmsi}</span>}
+                  {ev.detail && (
+                    <span className="admin-activity-detail mono" title={ev.detail}>
+                      {ev.detail}
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </td>
+    </tr>
+  );
+}
+
 function EditReceiverRow({
   receiver,
   tenantId,
