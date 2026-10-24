@@ -13,7 +13,11 @@ async function request<T>(path: string, options: RequestInit & { token?: string 
   const res = await fetch(`${API_BASE}${path}`, {
     ...rest,
     headers: {
-      "Content-Type": "application/json",
+      // Only send a JSON content-type when there's actually a body (e.g.
+      // DELETE calls have none) — Fastify's default JSON parser rejects
+      // an empty body sent with "Content-Type: application/json"
+      // (FST_ERR_CTP_EMPTY_JSON_BODY), which was breaking every delete.
+      ...(rest.body ? { "Content-Type": "application/json" } : {}),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...headers,
     },
