@@ -5,8 +5,13 @@ import { LiveFeedClient, type LivePositionUpdate } from "../ws/liveClient.js";
 import { FleetSidebar } from "../components/FleetSidebar.js";
 import { MapView, type MapVessel } from "../components/MapView.js";
 
-export function Dashboard() {
+interface DashboardProps {
+  onOpenAdmin: () => void;
+}
+
+export function Dashboard({ onOpenAdmin }: DashboardProps) {
   const { token, tenant, user, logout } = useAuth();
+  const canManage = user?.role === "owner" || user?.role === "admin" || user?.isPlatformAdmin;
   const [fleets, setFleets] = useState<Fleet[]>([]);
   const [vesselsByFleet, setVesselsByFleet] = useState<Record<string, FleetVessel[]>>({});
   const [selectedFleetId, setSelectedFleetId] = useState<string | null>(null);
@@ -143,6 +148,11 @@ export function Dashboard() {
         </div>
         <div>
           <span className="muted">{user?.email}</span>
+          {canManage && (
+            <button className="link-button" onClick={onOpenAdmin}>
+              Admin
+            </button>
+          )}
           <button className="link-button" onClick={logout}>
             Sign out
           </button>

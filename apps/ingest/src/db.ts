@@ -77,6 +77,40 @@ export async function upsertPosition(pos: NormalizedPosition, source: string): P
   }
 }
 
+export interface ReceiverRow {
+  id: string;
+  tenant_id: string;
+  tenant_slug: string;
+  name: string;
+  kind: "tcp_client" | "http_polling";
+  config: Record<string, unknown>;
+}
+
+/** Enabled, dynamically-managed receivers across all tenants (tcp_client + http_polling only). */
+export async function fetchActiveReceivers(): Promise<ReceiverRow[]> {
+  const { rows } = await pool.query(
+    `SELECT r.id, r.tenant_id, t.slug AS tenant_slug, r.name, r.kind, r.config
+     FROM receivers r JOIN tenants t ON t.id = r.tenant_id
+     WHERE r.enabled = true`
+  );
+  return rows;
+}
+
+export async function updateReceiverStatus(
+  id: string,
+  status: "connecting" | "connected" | "error" | "disabled",
+  message?: string | null
+): Promise<void> {
+  await pool.query(
+    "UPDATE receivers SET status = $2, status_message = $3, updated_at = now() WHERE id = $1",
+    [id, status, message ?? null]
+  );
+}
+
+export async function touchReceiverLastMessage(id: string): Promise<void> {
+  await pool.query("UPDATE receivers SET last_message_at = now() WHERE id = $1", [id]);
+}
+
 export async function upsertVesselStatic(update: NormalizedStaticUpdate): Promise<void> {
   await ensureVesselStub(update.mmsi);
   await pool.query(

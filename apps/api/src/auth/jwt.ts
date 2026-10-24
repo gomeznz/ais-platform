@@ -6,6 +6,7 @@ export interface AuthTokenPayload {
   tenantId: string;
   role: "owner" | "admin" | "member";
   email: string;
+  isPlatformAdmin: boolean;
 }
 
 export function signToken(payload: AuthTokenPayload): string {
