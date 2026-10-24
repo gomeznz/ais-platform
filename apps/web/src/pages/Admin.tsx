@@ -189,62 +189,64 @@ function UsersPanel({
 
   return (
     <div className="admin-panel">
-      <table className="admin-table">
-        <thead>
-          <tr>
-            <th>Email</th>
-            <th>Role</th>
-            <th>Status</th>
-            <th>Flags</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          {users.map((u) => (
-            <tr key={u.id}>
-              <td>{u.email}</td>
-              <td>
-                <select value={u.role} onChange={(e) => handleRoleChange(u, e.target.value)}>
-                  <option value="member">member</option>
-                  <option value="admin">admin</option>
-                  <option value="owner">owner</option>
-                </select>
-              </td>
-              <td>
-                <span className={`badge ${u.status === "active" ? "badge-ok" : "badge-off"}`}>
-                  {u.status}
-                </span>
-              </td>
-              <td>
-                {u.is_platform_admin && <span className="badge badge-accent">platform admin</span>}{" "}
-                {u.must_change_password && <span className="badge">pending password</span>}
-              </td>
-              <td className="admin-row-actions">
-                <button className="link-button" onClick={() => handleResetPassword(u)}>
-                  Reset password
-                </button>
-                <button className="link-button" onClick={() => handleStatusToggle(u)}>
-                  {u.status === "active" ? "Disable" : "Enable"}
-                </button>
-                <button
-                  className="link-button danger"
-                  onClick={() => handleDelete(u)}
-                  disabled={u.id === currentUser?.id}
-                >
-                  Remove
-                </button>
-              </td>
-            </tr>
-          ))}
-          {users.length === 0 && (
+      <div className="admin-table-scroll">
+        <table className="admin-table">
+          <thead>
             <tr>
-              <td colSpan={5} className="empty-hint">
-                No users yet.
-              </td>
+              <th>Email</th>
+              <th>Role</th>
+              <th>Status</th>
+              <th>Flags</th>
+              <th className="admin-actions-col"></th>
             </tr>
-          )}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {users.map((u) => (
+              <tr key={u.id}>
+                <td>{u.email}</td>
+                <td>
+                  <select value={u.role} onChange={(e) => handleRoleChange(u, e.target.value)}>
+                    <option value="member">member</option>
+                    <option value="admin">admin</option>
+                    <option value="owner">owner</option>
+                  </select>
+                </td>
+                <td>
+                  <span className={`badge ${u.status === "active" ? "badge-ok" : "badge-off"}`}>
+                    {u.status}
+                  </span>
+                </td>
+                <td>
+                  {u.is_platform_admin && <span className="badge badge-accent">platform admin</span>}{" "}
+                  {u.must_change_password && <span className="badge">pending password</span>}
+                </td>
+                <td className="admin-row-actions admin-actions-col">
+                  <button className="link-button" onClick={() => handleResetPassword(u)}>
+                    Reset password
+                  </button>
+                  <button className="link-button" onClick={() => handleStatusToggle(u)}>
+                    {u.status === "active" ? "Disable" : "Enable"}
+                  </button>
+                  <button
+                    className="link-button danger"
+                    onClick={() => handleDelete(u)}
+                    disabled={u.id === currentUser?.id}
+                  >
+                    Remove
+                  </button>
+                </td>
+              </tr>
+            ))}
+            {users.length === 0 && (
+              <tr>
+                <td colSpan={5} className="empty-hint">
+                  No users yet.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
 
       <form className="admin-form" onSubmit={handleCreate}>
         <h3>Add a user</h3>
@@ -401,55 +403,59 @@ function ReceiversPanel({
 
   return (
     <div className="admin-panel">
-      <table className="admin-table">
-        <thead>
-          <tr>
-            <th>Name</th>
-            <th>Kind</th>
-            <th>Connection</th>
-            <th>Status</th>
-            <th>Last message</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          {receivers.map((r) => (
-            <tr key={r.id}>
-              <td>{r.name}</td>
-              <td>
-                {r.kind === "tcp_client"
-                  ? "TCP (dial out)"
-                  : r.kind === "websocket"
-                  ? "WebSocket (aisstream.io)"
-                  : `HTTP polling${r.config.provider === "aistrail" ? " (AIS Trail)" : ""}`}
-              </td>
-              <td className="mono">{describeConfig(r)}</td>
-              <td>
-                <span className={`badge ${statusBadgeClass(r)}`}>
-                  {r.enabled ? r.status : "disabled"}
-                </span>
-                {r.status_message && <div className="status-message">{r.status_message}</div>}
-              </td>
-              <td>{r.last_message_at ? new Date(r.last_message_at).toLocaleString() : "never"}</td>
-              <td className="admin-row-actions">
-                <button className="link-button" onClick={() => handleToggle(r)}>
-                  {r.enabled ? "Disable" : "Enable"}
-                </button>
-                <button className="link-button danger" onClick={() => handleDelete(r)}>
-                  Remove
-                </button>
-              </td>
-            </tr>
-          ))}
-          {receivers.length === 0 && (
+      <div className="admin-table-scroll">
+        <table className="admin-table">
+          <thead>
             <tr>
-              <td colSpan={6} className="empty-hint">
-                No receivers configured yet.
-              </td>
+              <th>Name</th>
+              <th>Kind</th>
+              <th>Connection</th>
+              <th>Status</th>
+              <th>Last message</th>
+              <th className="admin-actions-col"></th>
             </tr>
-          )}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {receivers.map((r) => (
+              <tr key={r.id}>
+                <td>{r.name}</td>
+                <td>
+                  {r.kind === "tcp_client"
+                    ? "TCP (dial out)"
+                    : r.kind === "websocket"
+                    ? "WebSocket (aisstream.io)"
+                    : `HTTP polling${r.config.provider === "aistrail" ? " (AIS Trail)" : ""}`}
+                </td>
+                <td className="mono truncate" title={describeConfig(r)}>
+                  {describeConfig(r)}
+                </td>
+                <td>
+                  <span className={`badge ${statusBadgeClass(r)}`}>
+                    {r.enabled ? r.status : "disabled"}
+                  </span>
+                  {r.status_message && <div className="status-message">{r.status_message}</div>}
+                </td>
+                <td>{r.last_message_at ? new Date(r.last_message_at).toLocaleString() : "never"}</td>
+                <td className="admin-row-actions admin-actions-col">
+                  <button className="link-button" onClick={() => handleToggle(r)}>
+                    {r.enabled ? "Disable" : "Enable"}
+                  </button>
+                  <button className="link-button danger" onClick={() => handleDelete(r)}>
+                    Remove
+                  </button>
+                </td>
+              </tr>
+            ))}
+            {receivers.length === 0 && (
+              <tr>
+                <td colSpan={6} className="empty-hint">
+                  No receivers configured yet.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
 
       <form className="admin-form" onSubmit={handleCreate}>
         <h3>Add a receiver</h3>

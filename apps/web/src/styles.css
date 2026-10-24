@@ -307,13 +307,22 @@ input {
   max-width: 960px;
 }
 
-.admin-table {
-  width: 100%;
-  border-collapse: collapse;
-  background: var(--panel);
+/* The table itself can be wider than its column (long receiver URLs,
+   email addresses, etc.) — scope the horizontal scroll to this wrapper
+   rather than letting it overflow the page, and keep the row-actions
+   column pinned on-screen (see below) so Enable/Disable/Remove are never
+   scrolled out of reach with no visible cue. */
+.admin-table-scroll {
+  overflow-x: auto;
   border: 1px solid var(--border);
   border-radius: 10px;
-  overflow: hidden;
+}
+
+.admin-table {
+  width: 100%;
+  min-width: 640px;
+  border-collapse: collapse;
+  background: var(--panel);
 }
 
 .admin-table th,
@@ -344,10 +353,30 @@ input {
   font: inherit;
 }
 
+/* Long values (receiver URLs, bounding boxes) shouldn't force the whole
+   table wider than it needs to be — clip with an ellipsis and let the
+   full value show on hover via the title attribute. */
+.admin-table td.truncate {
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .admin-row-actions {
   display: flex;
   gap: 10px;
   white-space: nowrap;
+}
+
+/* Pin the actions column to the right edge of the scroll area so it's
+   always visible, even mid-scroll on a narrow viewport. */
+.admin-table th.admin-actions-col,
+.admin-table td.admin-actions-col {
+  position: sticky;
+  right: 0;
+  background: var(--panel);
+  box-shadow: -8px 0 8px -8px rgba(0, 0, 0, 0.5);
 }
 
 .admin-form {
