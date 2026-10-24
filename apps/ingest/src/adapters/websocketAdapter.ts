@@ -37,23 +37,49 @@ export function createWebsocketAdapter(options: WebsocketAdapterOptions): Websoc
     if (stopped) return;
     const ws = new WebSocket(options.url);
     socket = ws;
+    let messageCount = 0;
 
     ws.on("open", () => {
       backoffMs = 1000;
       options.onOpen?.();
       const subscribe = options.buildSubscribeMessage();
-      if (subscribe) ws.send(JSON.stringify(subscribe));
+      if (subscribe) {
+        // Log what was actually sent (minus any API key) — cheap way to
+        // confirm the subscribe payload matches what the admin UI saved,
+        // without needing DB access to check.
+        const redacted = Object.fromEntries(
+          Object.entries(subscribe).map(([k, v]) => [k, /api[-_]?key/i.test(k) ? "<redacted>" : v])
+        );
+        console.log(`[ingest] ${options.name} connected, sending subscribe: ${JSON.stringify(redacted)}`);
+        ws.send(JSON.stringify(subscribe));
+      }
     });
 
     ws.on("message", (raw) => {
+      messageCount += 1;
       let parsed: unknown;
       try {
         parsed = JSON.parse(raw.toString("utf8"));
       } catch {
-        return; // not JSON — ignore rather than crash the connection
+        console.warn(`[ingest] ${options.name} received non-JSON message (${raw.toString().length} bytes)`);
+        return;
       }
       try {
         const update = options.parseMessage(parsed);
+        // Log liberally at first (traffic has been zero so far — every frame
+        // is diagnostic signal) and fall back to sampling once it's clear
+        // messages really are flowing, so this can't turn into log spam.
+        if (messageCount <= 20 || messageCount % 50 === 0) {
+          const type = (parsed as { MessageType?: string } | null)?.MessageType ?? "(no MessageType)";
+          console.log(
+            `[ingest] ${options.name} msg#${messageCount} type="${type}" -> ${
+              update ? `parsed OK (mmsi ${update.mmsi})` : "dropped (not a usable position — see raw below)"
+            }`
+          );
+          if (!update) {
+            console.log(`[ingest] ${options.name} msg#${messageCount} raw: ${JSON.stringify(parsed).slice(0, 500)}`);
+          }
+        }
         if (update && onUpdateCb) onUpdateCb(update);
       } catch (err) {
         console.warn(`[ingest] ${options.name} failed to parse message: ${(err as Error).message}`);
