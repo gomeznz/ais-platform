@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { Fragment, useCallback, useEffect, useState, type FormEvent } from "react";
 import { useAuth } from "../state/auth.js";
 import {
   api,
@@ -278,6 +278,39 @@ function UsersPanel({
 
 // --- Receivers -----------------------------------------------------------
 
+interface ReceiverConfigFields {
+  host: string;
+  port: string;
+  provider: "generic" | "aistrail";
+  url: string;
+  apiToken: string;
+  intervalMs: string;
+  wsApiKey: string;
+  bboxLat1: string;
+  bboxLon1: string;
+  bboxLat2: string;
+  bboxLon2: string;
+  mmsiFilter: string;
+}
+
+/** Shared by the add-receiver form and the inline edit form so the two never drift apart. */
+function buildReceiverConfig(kind: ReceiverKind, f: ReceiverConfigFields): Record<string, unknown> {
+  if (kind === "tcp_client") return { host: f.host.trim(), port: Number(f.port) };
+  if (kind === "websocket") {
+    return {
+      apiKey: f.wsApiKey.trim(),
+      boundingBoxes: [[[Number(f.bboxLat1), Number(f.bboxLon1)], [Number(f.bboxLat2), Number(f.bboxLon2)]]],
+      mmsiFilter: f.mmsiFilter.trim()
+        ? f.mmsiFilter
+            .split(",")
+            .map((m) => m.trim())
+            .filter(Boolean)
+        : undefined,
+    };
+  }
+  return { url: f.url.trim(), token: f.apiToken.trim() || undefined, intervalMs: Number(f.intervalMs), provider: f.provider };
+}
+
 function ReceiversPanel({
   tenantId,
   setNotice,
@@ -303,6 +336,7 @@ function ReceiversPanel({
   const [mmsiFilter, setMmsiFilter] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!token) return;
@@ -322,31 +356,20 @@ function ReceiversPanel({
     setBusy(true);
     setError(null);
     try {
-      const config =
-        kind === "tcp_client"
-          ? { host: host.trim(), port: Number(port) }
-          : kind === "websocket"
-          ? {
-              apiKey: wsApiKey.trim(),
-              boundingBoxes: [
-                [
-                  [Number(bboxLat1), Number(bboxLon1)],
-                  [Number(bboxLat2), Number(bboxLon2)],
-                ],
-              ],
-              mmsiFilter: mmsiFilter.trim()
-                ? mmsiFilter
-                    .split(",")
-                    .map((m) => m.trim())
-                    .filter(Boolean)
-                : undefined,
-            }
-          : {
-              url: url.trim(),
-              token: apiToken.trim() || undefined,
-              intervalMs: Number(intervalMs),
-              provider,
-            };
+      const config = buildReceiverConfig(kind, {
+        host,
+        port,
+        provider,
+        url,
+        apiToken,
+        intervalMs,
+        wsApiKey,
+        bboxLat1,
+        bboxLon1,
+        bboxLat2,
+        bboxLon2,
+        mmsiFilter,
+      });
       await api.createReceiver(token, name.trim(), kind, config, tenantId);
       setName("");
       setHost("");
@@ -417,34 +440,54 @@ function ReceiversPanel({
           </thead>
           <tbody>
             {receivers.map((r) => (
-              <tr key={r.id}>
-                <td>{r.name}</td>
-                <td>
-                  {r.kind === "tcp_client"
-                    ? "TCP (dial out)"
-                    : r.kind === "websocket"
-                    ? "WebSocket (aisstream.io)"
-                    : `HTTP polling${r.config.provider === "aistrail" ? " (AIS Trail)" : ""}`}
-                </td>
-                <td className="mono truncate" title={describeConfig(r)}>
-                  {describeConfig(r)}
-                </td>
-                <td>
-                  <span className={`badge ${statusBadgeClass(r)}`}>
-                    {r.enabled ? r.status : "disabled"}
-                  </span>
-                  {r.status_message && <div className="status-message">{r.status_message}</div>}
-                </td>
-                <td>{r.last_message_at ? new Date(r.last_message_at).toLocaleString() : "never"}</td>
-                <td className="admin-row-actions admin-actions-col">
-                  <button className="link-button" onClick={() => handleToggle(r)}>
-                    {r.enabled ? "Disable" : "Enable"}
-                  </button>
-                  <button className="link-button danger" onClick={() => handleDelete(r)}>
-                    Remove
-                  </button>
-                </td>
-              </tr>
+              <Fragment key={r.id}>
+                <tr>
+                  <td>{r.name}</td>
+                  <td>
+                    {r.kind === "tcp_client"
+                      ? "TCP (dial out)"
+                      : r.kind === "websocket"
+                      ? "WebSocket (aisstream.io)"
+                      : `HTTP polling${r.config.provider === "aistrail" ? " (AIS Trail)" : ""}`}
+                  </td>
+                  <td className="mono truncate" title={describeConfig(r)}>
+                    {describeConfig(r)}
+                  </td>
+                  <td>
+                    <span className={`badge ${statusBadgeClass(r)}`}>
+                      {r.enabled ? r.status : "disabled"}
+                    </span>
+                    {r.status_message && <div className="status-message">{r.status_message}</div>}
+                  </td>
+                  <td>{r.last_message_at ? new Date(r.last_message_at).toLocaleString() : "never"}</td>
+                  <td className="admin-row-actions admin-actions-col">
+                    <button
+                      className="link-button"
+                      onClick={() => setEditingId(editingId === r.id ? null : r.id)}
+                    >
+                      {editingId === r.id ? "Close" : "Edit"}
+                    </button>
+                    <button className="link-button" onClick={() => handleToggle(r)}>
+                      {r.enabled ? "Disable" : "Enable"}
+                    </button>
+                    <button className="link-button danger" onClick={() => handleDelete(r)}>
+                      Remove
+                    </button>
+                  </td>
+                </tr>
+                {editingId === r.id && (
+                  <EditReceiverRow
+                    receiver={r}
+                    tenantId={tenantId}
+                    setNotice={setNotice}
+                    onCancel={() => setEditingId(null)}
+                    onSaved={async () => {
+                      setEditingId(null);
+                      await load();
+                    }}
+                  />
+                )}
+              </Fragment>
             ))}
             {receivers.length === 0 && (
               <tr>
@@ -582,6 +625,197 @@ function ReceiversPanel({
         {error && <div className="error-banner">{error}</div>}
       </form>
     </div>
+  );
+}
+
+/** Inline edit form for one receiver's config, rendered as an extra table row right below it. Kind is fixed — switching kind entirely changes the config shape, so that still goes through remove + re-add. */
+function EditReceiverRow({
+  receiver,
+  tenantId,
+  setNotice,
+  onCancel,
+  onSaved,
+}: {
+  receiver: Receiver;
+  tenantId: string | undefined;
+  setNotice: (msg: string | null) => void;
+  onCancel: () => void;
+  onSaved: () => void;
+}) {
+  const { token } = useAuth();
+  const existingBox = (receiver.config.boundingBoxes as [number, number][][] | undefined)?.[0];
+
+  const [name, setName] = useState(receiver.name);
+  const [host, setHost] = useState(String(receiver.config.host ?? ""));
+  const [port, setPort] = useState(receiver.config.port !== undefined ? String(receiver.config.port) : "");
+  const [provider, setProvider] = useState<"generic" | "aistrail">(
+    receiver.config.provider === "aistrail" ? "aistrail" : "generic"
+  );
+  const [url, setUrl] = useState(String(receiver.config.url ?? ""));
+  const [apiToken, setApiToken] = useState(String(receiver.config.token ?? ""));
+  const [intervalMs, setIntervalMs] = useState(
+    receiver.config.intervalMs !== undefined ? String(receiver.config.intervalMs) : "15000"
+  );
+  const [wsApiKey, setWsApiKey] = useState(String(receiver.config.apiKey ?? ""));
+  const [bboxLat1, setBboxLat1] = useState(existingBox ? String(existingBox[0][0]) : "");
+  const [bboxLon1, setBboxLon1] = useState(existingBox ? String(existingBox[0][1]) : "");
+  const [bboxLat2, setBboxLat2] = useState(existingBox ? String(existingBox[1][0]) : "");
+  const [bboxLon2, setBboxLon2] = useState(existingBox ? String(existingBox[1][1]) : "");
+  const [mmsiFilter, setMmsiFilter] = useState(
+    Array.isArray(receiver.config.mmsiFilter) ? (receiver.config.mmsiFilter as string[]).join(", ") : ""
+  );
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleSave(e: FormEvent) {
+    e.preventDefault();
+    if (!token || !name.trim()) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const config = buildReceiverConfig(receiver.kind, {
+        host,
+        port,
+        provider,
+        url,
+        apiToken,
+        intervalMs,
+        wsApiKey,
+        bboxLat1,
+        bboxLon1,
+        bboxLat2,
+        bboxLon2,
+        mmsiFilter,
+      });
+      await api.updateReceiver(token, receiver.id, { name: name.trim(), config }, tenantId);
+      setNotice(`Receiver "${name.trim()}" updated.`);
+      onSaved();
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <tr className="admin-edit-row">
+      <td colSpan={6}>
+        <form className="admin-form admin-edit-form" onSubmit={handleSave}>
+          <div className="inline-form">
+            <input placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} required />
+            <span className="muted">
+              {receiver.kind === "tcp_client"
+                ? "TCP (dial out) — kind can't be changed; remove and re-add to switch"
+                : receiver.kind === "websocket"
+                ? "WebSocket (aisstream.io) — kind can't be changed; remove and re-add to switch"
+                : "HTTP polling — kind can't be changed; remove and re-add to switch"}
+            </span>
+          </div>
+          {receiver.kind === "tcp_client" ? (
+            <div className="inline-form">
+              <input placeholder="Host" value={host} onChange={(e) => setHost(e.target.value)} required />
+              <input
+                placeholder="Port"
+                inputMode="numeric"
+                value={port}
+                onChange={(e) => setPort(e.target.value)}
+                required
+              />
+            </div>
+          ) : receiver.kind === "websocket" ? (
+            <>
+              <div className="inline-form">
+                <input
+                  placeholder="aisstream.io API key"
+                  value={wsApiKey}
+                  onChange={(e) => setWsApiKey(e.target.value)}
+                  required
+                />
+              </div>
+              <div className="inline-form">
+                <input
+                  placeholder="Lat 1"
+                  inputMode="decimal"
+                  value={bboxLat1}
+                  onChange={(e) => setBboxLat1(e.target.value)}
+                  required
+                />
+                <input
+                  placeholder="Lon 1"
+                  inputMode="decimal"
+                  value={bboxLon1}
+                  onChange={(e) => setBboxLon1(e.target.value)}
+                  required
+                />
+                <input
+                  placeholder="Lat 2"
+                  inputMode="decimal"
+                  value={bboxLat2}
+                  onChange={(e) => setBboxLat2(e.target.value)}
+                  required
+                />
+                <input
+                  placeholder="Lon 2"
+                  inputMode="decimal"
+                  value={bboxLon2}
+                  onChange={(e) => setBboxLon2(e.target.value)}
+                  required
+                />
+              </div>
+              <div className="inline-form">
+                <input
+                  placeholder="MMSI filter (optional, comma separated)"
+                  value={mmsiFilter}
+                  onChange={(e) => setMmsiFilter(e.target.value)}
+                />
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="inline-form">
+                <select value={provider} onChange={(e) => setProvider(e.target.value as typeof provider)}>
+                  <option value="generic">Generic JSON ({"{ vessels: [...] }"})</option>
+                  <option value="aistrail">AIS Trail (aistrail.com)</option>
+                </select>
+              </div>
+              <div className="inline-form">
+                <input
+                  placeholder={
+                    provider === "aistrail"
+                      ? "https://api.aistrail.com/v1/positions?bbox=lat_min,lon_min,lat_max,lon_max&max_age=600"
+                      : "https://provider.example/api/positions"
+                  }
+                  value={url}
+                  onChange={(e) => setUrl(e.target.value)}
+                  required
+                />
+                <input
+                  placeholder={provider === "aistrail" ? "API key (ap_live_...)" : "API token (optional)"}
+                  value={apiToken}
+                  onChange={(e) => setApiToken(e.target.value)}
+                  required={provider === "aistrail"}
+                />
+                <input
+                  placeholder="Poll ms"
+                  inputMode="numeric"
+                  value={intervalMs}
+                  onChange={(e) => setIntervalMs(e.target.value)}
+                />
+              </div>
+            </>
+          )}
+          <div className="inline-form">
+            <button type="submit" disabled={busy}>
+              Save
+            </button>
+            <button type="button" className="link-button" onClick={onCancel} disabled={busy}>
+              Cancel
+            </button>
+          </div>
+          {error && <div className="error-banner">{error}</div>}
+        </form>
+      </td>
+    </tr>
   );
 }
 
