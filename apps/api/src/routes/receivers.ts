@@ -3,7 +3,7 @@ import { pool } from "../db/client.js";
 import { authenticate } from "../auth/plugin.js";
 import { requireTenantAdmin, resolveTenantId } from "../middleware/tenantScope.js";
 
-type ReceiverKind = "tcp_client" | "http_polling";
+type ReceiverKind = "tcp_client" | "http_polling" | "websocket";
 
 interface TcpClientConfig {
   host: string;
@@ -18,16 +18,26 @@ interface HttpPollingConfig {
   provider?: "generic" | "aistrail";
 }
 
+interface WebsocketConfig {
+  apiKey: string;
+  /** [[lat1,lon1],[lat2,lon2]] boxes, aisstream.io's own shape. */
+  boundingBoxes: [number, number][][];
+  mmsiFilter?: string[];
+  messageTypes?: string[];
+  /** Override the default aisstream.io stream URL (mainly for testing). */
+  url?: string;
+}
+
 interface CreateReceiverBody {
   name: string;
   kind: ReceiverKind;
-  config: TcpClientConfig | HttpPollingConfig;
+  config: TcpClientConfig | HttpPollingConfig | WebsocketConfig;
   enabled?: boolean;
 }
 
 interface UpdateReceiverBody {
   name?: string;
-  config?: TcpClientConfig | HttpPollingConfig;
+  config?: TcpClientConfig | HttpPollingConfig | WebsocketConfig;
   enabled?: boolean;
 }
 
@@ -56,7 +66,37 @@ function validateConfig(kind: ReceiverKind, config: unknown): string | null {
     }
     return null;
   }
-  return "kind must be tcp_client or http_polling";
+  if (kind === "websocket") {
+    if (typeof c.apiKey !== "string" || !c.apiKey.trim()) return "config.apiKey is required for websocket";
+    if (!Array.isArray(c.boundingBoxes) || c.boundingBoxes.length === 0) {
+      return "config.boundingBoxes is required for websocket (at least one [[lat,lon],[lat,lon]] box)";
+    }
+    for (const box of c.boundingBoxes) {
+      if (
+        !Array.isArray(box) ||
+        box.length !== 2 ||
+        !box.every((pt) => Array.isArray(pt) && pt.length === 2 && pt.every((n) => typeof n === "number"))
+      ) {
+        return "each config.boundingBoxes entry must be [[lat,lon],[lat,lon]]";
+      }
+    }
+    if (c.mmsiFilter !== undefined && (!Array.isArray(c.mmsiFilter) || !c.mmsiFilter.every((m) => typeof m === "string"))) {
+      return "config.mmsiFilter must be an array of MMSI strings";
+    }
+    if (c.messageTypes !== undefined && (!Array.isArray(c.messageTypes) || !c.messageTypes.every((m) => typeof m === "string"))) {
+      return "config.messageTypes must be an array of strings";
+    }
+    if (c.url !== undefined) {
+      if (typeof c.url !== "string" || !c.url.trim()) return "config.url must be a non-empty string if provided";
+      try {
+        new URL(c.url);
+      } catch {
+        return "config.url must be a valid URL";
+      }
+    }
+    return null;
+  }
+  return "kind must be tcp_client, http_polling, or websocket";
 }
 
 async function notifyReceiversChanged(tenantId: string): Promise<void> {

@@ -82,11 +82,11 @@ export interface ReceiverRow {
   tenant_id: string;
   tenant_slug: string;
   name: string;
-  kind: "tcp_client" | "http_polling";
+  kind: "tcp_client" | "http_polling" | "websocket";
   config: Record<string, unknown>;
 }
 
-/** Enabled, dynamically-managed receivers across all tenants (tcp_client + http_polling only). */
+/** Enabled, dynamically-managed receivers across all tenants (tcp_client + http_polling + websocket). */
 export async function fetchActiveReceivers(): Promise<ReceiverRow[]> {
   const { rows } = await pool.query(
     `SELECT r.id, r.tenant_id, t.slug AS tenant_slug, r.name, r.kind, r.config

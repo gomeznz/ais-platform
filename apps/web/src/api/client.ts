@@ -96,7 +96,7 @@ export interface Tenant {
   receiver_count: number;
 }
 
-export type ReceiverKind = "tcp_client" | "http_polling";
+export type ReceiverKind = "tcp_client" | "http_polling" | "websocket";
 
 export interface Receiver {
   id: string;

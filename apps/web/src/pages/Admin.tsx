@@ -293,6 +293,12 @@ function ReceiversPanel({
   const [url, setUrl] = useState("");
   const [apiToken, setApiToken] = useState("");
   const [intervalMs, setIntervalMs] = useState("15000");
+  const [wsApiKey, setWsApiKey] = useState("");
+  const [bboxLat1, setBboxLat1] = useState("");
+  const [bboxLon1, setBboxLon1] = useState("");
+  const [bboxLat2, setBboxLat2] = useState("");
+  const [bboxLon2, setBboxLon2] = useState("");
+  const [mmsiFilter, setMmsiFilter] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -317,6 +323,22 @@ function ReceiversPanel({
       const config =
         kind === "tcp_client"
           ? { host: host.trim(), port: Number(port) }
+          : kind === "websocket"
+          ? {
+              apiKey: wsApiKey.trim(),
+              boundingBoxes: [
+                [
+                  [Number(bboxLat1), Number(bboxLon1)],
+                  [Number(bboxLat2), Number(bboxLon2)],
+                ],
+              ],
+              mmsiFilter: mmsiFilter.trim()
+                ? mmsiFilter
+                    .split(",")
+                    .map((m) => m.trim())
+                    .filter(Boolean)
+                : undefined,
+            }
           : {
               url: url.trim(),
               token: apiToken.trim() || undefined,
@@ -330,6 +352,12 @@ function ReceiversPanel({
       setUrl("");
       setApiToken("");
       setProvider("generic");
+      setWsApiKey("");
+      setBboxLat1("");
+      setBboxLon1("");
+      setBboxLat2("");
+      setBboxLon2("");
+      setMmsiFilter("");
       await load();
       setNotice(`Receiver "${name.trim()}" added — connecting now.`);
     } catch (err) {
@@ -362,6 +390,12 @@ function ReceiversPanel({
 
   function describeConfig(r: Receiver): string {
     if (r.kind === "tcp_client") return `${r.config.host}:${r.config.port}`;
+    if (r.kind === "websocket") {
+      const boxes = r.config.boundingBoxes as [number, number][][] | undefined;
+      return boxes && boxes.length > 0
+        ? `bbox ${boxes[0][0].join(",")} → ${boxes[0][1].join(",")}`
+        : "aisstream.io";
+    }
     return String(r.config.url);
   }
 
@@ -385,6 +419,8 @@ function ReceiversPanel({
               <td>
                 {r.kind === "tcp_client"
                   ? "TCP (dial out)"
+                  : r.kind === "websocket"
+                  ? "WebSocket (aisstream.io)"
                   : `HTTP polling${r.config.provider === "aistrail" ? " (AIS Trail)" : ""}`}
               </td>
               <td className="mono">{describeConfig(r)}</td>
@@ -422,6 +458,7 @@ function ReceiversPanel({
           <select value={kind} onChange={(e) => setKind(e.target.value as ReceiverKind)}>
             <option value="tcp_client">TCP (dial out to receiver)</option>
             <option value="http_polling">HTTP polling (satellite/aggregator)</option>
+            <option value="websocket">WebSocket (aisstream.io)</option>
           </select>
         </div>
         {kind === "tcp_client" ? (
@@ -435,6 +472,58 @@ function ReceiversPanel({
               required
             />
           </div>
+        ) : kind === "websocket" ? (
+          <>
+            <div className="inline-form">
+              <input
+                placeholder="aisstream.io API key"
+                value={wsApiKey}
+                onChange={(e) => setWsApiKey(e.target.value)}
+                required
+              />
+            </div>
+            <div className="inline-form">
+              <input
+                placeholder="Lat 1"
+                inputMode="decimal"
+                value={bboxLat1}
+                onChange={(e) => setBboxLat1(e.target.value)}
+                required
+              />
+              <input
+                placeholder="Lon 1"
+                inputMode="decimal"
+                value={bboxLon1}
+                onChange={(e) => setBboxLon1(e.target.value)}
+                required
+              />
+              <input
+                placeholder="Lat 2"
+                inputMode="decimal"
+                value={bboxLat2}
+                onChange={(e) => setBboxLat2(e.target.value)}
+                required
+              />
+              <input
+                placeholder="Lon 2"
+                inputMode="decimal"
+                value={bboxLon2}
+                onChange={(e) => setBboxLon2(e.target.value)}
+                required
+              />
+            </div>
+            <div className="inline-form">
+              <input
+                placeholder="MMSI filter (optional, comma separated)"
+                value={mmsiFilter}
+                onChange={(e) => setMmsiFilter(e.target.value)}
+              />
+            </div>
+            <p className="muted">
+              Free, no plan limits — sign in with GitHub at aisstream.io to get an API key. The bounding box
+              is two corners (lat, lon) covering your area of interest.
+            </p>
+          </>
         ) : (
           <>
             <div className="inline-form">

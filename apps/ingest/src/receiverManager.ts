@@ -4,6 +4,8 @@ import { AisDecoder, type DecodedAisMessage } from "@ais-platform/ais-decoder";
 import { LineFramer } from "./sources/lineFramer.js";
 import { createHttpPollingAdapter } from "./adapters/httpPollingAdapter.js";
 import { getProviderParser, normalizeProvider } from "./adapters/providers.js";
+import { createWebsocketAdapter } from "./adapters/websocketAdapter.js";
+import { AISSTREAM_DEFAULT_URL, buildAisStreamSubscribeMessage, parseAisStreamMessage } from "./adapters/aisstreamProvider.js";
 import type { SatellitePositionUpdate } from "./adapters/types.js";
 import { config } from "./config.js";
 import { fetchActiveReceivers, updateReceiverStatus, touchReceiverLastMessage, type ReceiverRow } from "./db.js";
@@ -136,6 +138,9 @@ export class ReceiverManager {
     if (receiver.kind === "tcp_client") {
       return this.startTcpClientReceiver(receiver, sourceName);
     }
+    if (receiver.kind === "websocket") {
+      return this.startWebsocketReceiver(receiver, sourceName);
+    }
     return this.startHttpPollingReceiver(receiver, sourceName);
   }
 
@@ -216,6 +221,51 @@ export class ReceiverManager {
     return () => {
       adapter.stop();
       updateReceiverStatus(receiver.id, "disabled", null).catch(() => {});
+    };
+  }
+
+  private startWebsocketReceiver(receiver: ReceiverRow, sourceName: string): () => void {
+    const apiKey = String(receiver.config.apiKey ?? "");
+    const boundingBoxes = Array.isArray(receiver.config.boundingBoxes)
+      ? (receiver.config.boundingBoxes as [[number, number], [number, number]][])
+      : [];
+    const mmsiFilter = Array.isArray(receiver.config.mmsiFilter)
+      ? (receiver.config.mmsiFilter as string[])
+      : undefined;
+    const messageTypes = Array.isArray(receiver.config.messageTypes)
+      ? (receiver.config.messageTypes as string[])
+      : undefined;
+    const url = typeof receiver.config.url === "string" && receiver.config.url ? receiver.config.url : AISSTREAM_DEFAULT_URL;
+
+    // A local/fast WebSocket can open and call onOpen before the initial
+    // "connecting" write even resolves — chain status writes through one
+    // promise so they always apply in the order they were issued, rather
+    // than racing (two independent fire-and-forget queries can resolve out
+    // of order and leave a stale "connecting" status behind).
+    let statusChain = updateReceiverStatus(receiver.id, "connecting").catch(() => {});
+    const setStatus = (status: "connected" | "error", message?: string | null) => {
+      statusChain = statusChain
+        .then(() => updateReceiverStatus(receiver.id, status, message ?? null))
+        .catch(() => {});
+    };
+
+    const adapter = createWebsocketAdapter({
+      name: sourceName,
+      url,
+      buildSubscribeMessage: () => buildAisStreamSubscribeMessage({ apiKey, boundingBoxes, mmsiFilter, messageTypes }),
+      parseMessage: parseAisStreamMessage,
+      onOpen: () => setStatus("connected"),
+      onError: (message) => setStatus("error", message),
+    });
+
+    adapter.start((update) => {
+      this.touch(receiver.id);
+      this.onSatelliteUpdate(update, sourceName);
+    });
+
+    return () => {
+      adapter.stop();
+      statusChain = statusChain.then(() => updateReceiverStatus(receiver.id, "disabled", null)).catch(() => {});
     };
   }
 }

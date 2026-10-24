@@ -86,7 +86,7 @@ async function main() {
     stopFns.push(() => adapter.stop());
   }
 
-  // --- Admin-managed receivers (tcp_client + http_polling), DB-backed ------
+  // --- Admin-managed receivers (tcp_client + http_polling + websocket), DB-backed ------
   // Separate from the static env-configured sources above: these are
   // added/edited/removed per tenant from the admin UI without a redeploy.
   const receiverManager = new ReceiverManager(
