@@ -13,6 +13,36 @@ export interface HttpPollingAdapterOptions {
    * since every satellite/aggregator API has its own schema.
    */
   parseResponse?: (body: unknown) => SatellitePositionUpdate[];
+  /** Called with a human-readable message whenever a poll fails (non-2xx or network error). */
+  onError?: (message: string) => void;
+  /** Called on every successful (2xx) poll, even if it returned zero updates. */
+  onPollOk?: () => void;
+}
+
+/**
+ * RFC 9457 "problem details" error body, used by AIS Trail and a growing
+ * number of JSON APIs. Not every provider uses this shape, so parsing it is
+ * best-effort — a plain-text or differently-shaped error body just falls
+ * back to the raw status line.
+ */
+interface ProblemDetails {
+  title?: string;
+  detail?: string;
+  retry_after_s?: number;
+}
+
+async function describeHttpError(res: Response): Promise<string> {
+  const base = `HTTP ${res.status}`;
+  const contentType = res.headers.get("content-type") ?? "";
+  if (!contentType.includes("json")) return base;
+  try {
+    const body = (await res.json()) as ProblemDetails;
+    const parts = [base, body.title, body.detail].filter(Boolean);
+    if (body.retry_after_s) parts.push(`(retry after ${body.retry_after_s}s)`);
+    return parts.join(" — ");
+  } catch {
+    return base;
+  }
 }
 
 function defaultParse(body: unknown): SatellitePositionUpdate[] {
@@ -56,13 +86,18 @@ export function createHttpPollingAdapter(options: HttpPollingAdapterOptions): Sa
         headers: options.token ? { Authorization: `Bearer ${options.token}` } : undefined,
       });
       if (!res.ok) {
-        console.warn(`[ingest] ${options.name} poll failed: HTTP ${res.status}`);
+        const message = await describeHttpError(res);
+        console.warn(`[ingest] ${options.name} poll failed: ${message}`);
+        options.onError?.(message);
         return;
       }
       const body = await res.json();
       for (const update of parse(body)) onUpdate(update);
+      options.onPollOk?.();
     } catch (err) {
-      console.warn(`[ingest] ${options.name} poll error: ${(err as Error).message}`);
+      const message = (err as Error).message;
+      console.warn(`[ingest] ${options.name} poll error: ${message}`);
+      options.onError?.(message);
     }
   }
 

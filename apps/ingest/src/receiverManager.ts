@@ -3,6 +3,7 @@ import pg from "pg";
 import { AisDecoder, type DecodedAisMessage } from "@ais-platform/ais-decoder";
 import { LineFramer } from "./sources/lineFramer.js";
 import { createHttpPollingAdapter } from "./adapters/httpPollingAdapter.js";
+import { getProviderParser, normalizeProvider } from "./adapters/providers.js";
 import type { SatellitePositionUpdate } from "./adapters/types.js";
 import { config } from "./config.js";
 import { fetchActiveReceivers, updateReceiverStatus, touchReceiverLastMessage, type ReceiverRow } from "./db.js";
@@ -193,6 +194,7 @@ export class ReceiverManager {
     const url = String(receiver.config.url);
     const token = typeof receiver.config.token === "string" ? receiver.config.token : undefined;
     const intervalMs = typeof receiver.config.intervalMs === "number" ? receiver.config.intervalMs : 15_000;
+    const provider = normalizeProvider(receiver.config.provider);
 
     updateReceiverStatus(receiver.id, "connecting").catch(() => {});
 
@@ -201,11 +203,13 @@ export class ReceiverManager {
       url,
       token,
       intervalMs,
+      parseResponse: getProviderParser(provider),
+      onError: (message) => updateReceiverStatus(receiver.id, "error", message).catch(() => {}),
+      onPollOk: () => updateReceiverStatus(receiver.id, "connected").catch(() => {}),
     });
 
     adapter.start((update) => {
       this.touch(receiver.id);
-      updateReceiverStatus(receiver.id, "connected").catch(() => {});
       this.onSatelliteUpdate(update, sourceName);
     });
 

@@ -14,6 +14,8 @@ interface HttpPollingConfig {
   url: string;
   token?: string;
   intervalMs?: number;
+  /** "generic" (default) expects {vessels:[...]} or a bare array; "aistrail" parses aistrail.com's /v1/positions shape. */
+  provider?: "generic" | "aistrail";
 }
 
 interface CreateReceiverBody {
@@ -48,6 +50,9 @@ function validateConfig(kind: ReceiverKind, config: unknown): string | null {
     }
     if (c.intervalMs !== undefined && (typeof c.intervalMs !== "number" || c.intervalMs < 1000)) {
       return "config.intervalMs must be at least 1000ms";
+    }
+    if (c.provider !== undefined && c.provider !== "generic" && c.provider !== "aistrail") {
+      return "config.provider must be generic or aistrail";
     }
     return null;
   }

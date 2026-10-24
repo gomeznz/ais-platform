@@ -289,6 +289,7 @@ function ReceiversPanel({
   const [kind, setKind] = useState<ReceiverKind>("tcp_client");
   const [host, setHost] = useState("");
   const [port, setPort] = useState("");
+  const [provider, setProvider] = useState<"generic" | "aistrail">("generic");
   const [url, setUrl] = useState("");
   const [apiToken, setApiToken] = useState("");
   const [intervalMs, setIntervalMs] = useState("15000");
@@ -316,13 +317,19 @@ function ReceiversPanel({
       const config =
         kind === "tcp_client"
           ? { host: host.trim(), port: Number(port) }
-          : { url: url.trim(), token: apiToken.trim() || undefined, intervalMs: Number(intervalMs) };
+          : {
+              url: url.trim(),
+              token: apiToken.trim() || undefined,
+              intervalMs: Number(intervalMs),
+              provider,
+            };
       await api.createReceiver(token, name.trim(), kind, config, tenantId);
       setName("");
       setHost("");
       setPort("");
       setUrl("");
       setApiToken("");
+      setProvider("generic");
       await load();
       setNotice(`Receiver "${name.trim()}" added — connecting now.`);
     } catch (err) {
@@ -375,7 +382,11 @@ function ReceiversPanel({
           {receivers.map((r) => (
             <tr key={r.id}>
               <td>{r.name}</td>
-              <td>{r.kind === "tcp_client" ? "TCP (dial out)" : "HTTP polling"}</td>
+              <td>
+                {r.kind === "tcp_client"
+                  ? "TCP (dial out)"
+                  : `HTTP polling${r.config.provider === "aistrail" ? " (AIS Trail)" : ""}`}
+              </td>
               <td className="mono">{describeConfig(r)}</td>
               <td>
                 <span className={`badge ${statusBadgeClass(r)}`}>
@@ -425,25 +436,44 @@ function ReceiversPanel({
             />
           </div>
         ) : (
-          <div className="inline-form">
-            <input
-              placeholder="https://provider.example/api/positions"
-              value={url}
-              onChange={(e) => setUrl(e.target.value)}
-              required
-            />
-            <input
-              placeholder="API token (optional)"
-              value={apiToken}
-              onChange={(e) => setApiToken(e.target.value)}
-            />
-            <input
-              placeholder="Poll ms"
-              inputMode="numeric"
-              value={intervalMs}
-              onChange={(e) => setIntervalMs(e.target.value)}
-            />
-          </div>
+          <>
+            <div className="inline-form">
+              <select value={provider} onChange={(e) => setProvider(e.target.value as typeof provider)}>
+                <option value="generic">Generic JSON ({"{ vessels: [...] }"})</option>
+                <option value="aistrail">AIS Trail (aistrail.com)</option>
+              </select>
+            </div>
+            <div className="inline-form">
+              <input
+                placeholder={
+                  provider === "aistrail"
+                    ? "https://api.aistrail.com/v1/positions?bbox=lat_min,lon_min,lat_max,lon_max&max_age=600"
+                    : "https://provider.example/api/positions"
+                }
+                value={url}
+                onChange={(e) => setUrl(e.target.value)}
+                required
+              />
+              <input
+                placeholder={provider === "aistrail" ? "API key (ap_live_...)" : "API token (optional)"}
+                value={apiToken}
+                onChange={(e) => setApiToken(e.target.value)}
+                required={provider === "aistrail"}
+              />
+              <input
+                placeholder="Poll ms"
+                inputMode="numeric"
+                value={intervalMs}
+                onChange={(e) => setIntervalMs(e.target.value)}
+              />
+            </div>
+            {provider === "aistrail" && (
+              <p className="muted">
+                Live positions require AIS Trail's Pro or Business plan, and the bbox in the URL sets which
+                area gets polled — see aistrail.com/docs/quickstart.
+              </p>
+            )}
+          </>
         )}
         <div className="inline-form">
           <button type="submit" disabled={busy}>

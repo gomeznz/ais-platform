@@ -17,7 +17,20 @@ export interface SatellitePositionUpdate {
   shipName?: string | null;
   callSign?: string | null;
   imo?: number | null;
+  /** Raw AIS ship type code (0-99), if the provider gives one. */
   shipType?: number | null;
+  /**
+   * Human-readable ship type category, for providers (e.g. AIS Trail) that
+   * only give a text category rather than the raw AIS numeric code. When
+   * present, this is used as-is instead of deriving text from `shipType`.
+   */
+  shipTypeText?: string | null;
+  destination?: string | null;
+  draught?: number | null;
+  etaMonth?: number | null;
+  etaDay?: number | null;
+  etaHour?: number | null;
+  etaMinute?: number | null;
 }
 
 export interface SatelliteAdapter {

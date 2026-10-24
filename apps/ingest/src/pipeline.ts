@@ -21,14 +21,24 @@ export async function handleSatelliteUpdate(
   };
   await upsertPosition(pos, source);
 
-  if (update.shipName || update.callSign || update.imo || update.shipType) {
+  const hasStaticData =
+    update.shipName || update.callSign || update.imo || update.shipType || update.shipTypeText ||
+    update.destination || update.draught != null || update.etaMonth != null;
+
+  if (hasStaticData) {
     await upsertVesselStatic({
       mmsi: update.mmsi,
       shipName: update.shipName,
       callSign: update.callSign,
       imo: update.imo,
       shipType: update.shipType,
-      shipTypeText: shipTypeCategory(update.shipType ?? undefined),
+      shipTypeText: update.shipTypeText ?? shipTypeCategory(update.shipType ?? undefined),
+      destination: update.destination,
+      draught: update.draught,
+      etaMonth: update.etaMonth,
+      etaDay: update.etaDay,
+      etaHour: update.etaHour,
+      etaMinute: update.etaMinute,
     });
   }
 }
